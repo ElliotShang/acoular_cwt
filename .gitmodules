@@ -1,0 +1,3 @@
+[submodule "external/fCWT"]
+	path = external/fCWT
+	url = https://github.com/fastlib/fCWT.git
