@@ -21,7 +21,8 @@ class TimeFrequencyProcessor
             int num_channels,
             float fs,
             float target_freq,
-            size_t target_idx
+            size_t target_idx,
+            int smoothing_width = 0 // 新增平滑参数
         ) = 0;
 
 };
