@@ -24,7 +24,7 @@ class CWTProcessor : public TimeFrequencyProcessor
         CWTProcessor();
 
         std::vector<Complex> computeSnapshot(
-            std::span<const Complex> data, //  span 特性，无需采用引用传递而是值传递
+            std::span<const float> data, //  span 特性，无需采用引用传递而是值传递，输入原始信号为实数
             int num_channels,
             float fs,
             float target_freq,

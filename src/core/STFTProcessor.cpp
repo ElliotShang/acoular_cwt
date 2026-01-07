@@ -26,7 +26,7 @@ STFTProcessor::STFTProcessor(int window_width) : width(window_width) {}
 STFTProcessor::STFTProcessor() : STFTProcessor(1024) {}
 
 std::vector<Complex> STFTProcessor::computeSnapshot(
-    std::span<const Complex> data,
+    std::span<const float> data,  // 输入原始信号为实数
     int num_channels,
     float fs,
     float target_freq,
@@ -53,18 +53,18 @@ std::vector<Complex> STFTProcessor::computeSnapshot(
         // ---- 线程局部存储 (Thread Local Storage) ----
         // 每个线程分配自己的输入/输出 buffer 和 plan，避免竞争
         
-        std::vector<std::complex<float>> thread_in(width);
-        std::vector<std::complex<float>> thread_out(width);
+        std::vector<float> thread_in(width);  // 实数输入
+        std::vector<std::complex<float>> thread_out(width / 2 + 1);  // 复数输出，r2c FFT 只输出一半频谱
         
-        // 创建 plan (FFTW plan 创建需加锁)
+        // 创建 plan (FFTW plan 创建需加锁) - 使用 r2c (real to complex) FFT
         fftwf_plan plan = nullptr;
         
         #pragma omp critical
         {
-            plan = fftwf_plan_dft_1d(width, 
-                                     reinterpret_cast<fftwf_complex*>(thread_in.data()), 
-                                     reinterpret_cast<fftwf_complex*>(thread_out.data()), 
-                                     FFTW_FORWARD, FFTW_ESTIMATE);
+            plan = fftwf_plan_dft_r2c_1d(width, 
+                                         thread_in.data(), 
+                                         reinterpret_cast<fftwf_complex*>(thread_out.data()), 
+                                         FFTW_ESTIMATE);
         }
 
         #pragma omp for
@@ -78,9 +78,9 @@ std::vector<Complex> STFTProcessor::computeSnapshot(
                 
                 // 边界处理：Zero Padding
                 if (current_sample_idx >= 0 && current_sample_idx < static_cast<long long>(num_samples_per_channel)) {
-                    // 读取数据并乘窗函数
-                    Complex val = data[ch_offset + current_sample_idx];
-                    thread_in[i] = val * window[i];
+                    // 读取实数数据并乘窗函数
+                    float real_val = data[ch_offset + current_sample_idx];
+                    thread_in[i] = real_val * window[i];
                 } else {
                     thread_in[i] = 0.0f;
                 }
@@ -93,7 +93,8 @@ std::vector<Complex> STFTProcessor::computeSnapshot(
             // bin_idx = target_freq * width / fs
             int bin_idx = static_cast<int>(std::round(target_freq * width / fs));
             
-            if (bin_idx >= 0 && bin_idx < width) {
+            // r2c FFT 输出范围是 [0, width/2]
+            if (bin_idx >= 0 && bin_idx < static_cast<int>(thread_out.size())) {
                 snapshot[ch] = thread_out[bin_idx];
             } else {
                 snapshot[ch] = 0.0f;

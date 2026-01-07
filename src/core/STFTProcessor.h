@@ -23,7 +23,7 @@ class STFTProcessor : public TimeFrequencyProcessor
         STFTProcessor();
 
         std::vector<Complex> computeSnapshot(
-            std::span<const Complex> data,
+            std::span<const float> data,  // 输入原始信号为实数
             int num_channels,
             float fs,
             float target_freq,
