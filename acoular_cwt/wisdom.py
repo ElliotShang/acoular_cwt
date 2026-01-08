@@ -7,7 +7,6 @@ Wisdom 文件存放在用户主目录的 .acoular_cwt/ 目录下。
 
 import os
 from pathlib import Path
-import fcwt
 
 # 默认 wisdom 存放目录
 WISDOM_DIR = Path.home() / '.acoular_cwt' / 'wisdom'
@@ -64,6 +63,17 @@ def generate_wisdom(max_size=8192, threads=1, flags="FFTW_MEASURE"):
     valid_flags = ["FFTW_ESTIMATE", "FFTW_MEASURE", "FFTW_PATIENT", "FFTW_EXHAUSTIVE"]
     if flags not in valid_flags:
         raise ValueError(f"flags 必须是 {valid_flags} 之一，当前值: {flags}")
+    
+    # 延迟导入 fcwt（避免在包导入时就要求 fcwt 已安装）
+    try:
+        import fcwt
+    except ImportError:
+        raise ImportError(
+            "fcwt 模块未安装。请先安装 fCWT Python 包：\n"
+            "  pip install fcwt\n"
+            "或者从源码安装：\n"
+            "  cd external/fCWT && pip install ."
+        )
     
     # 确保目录存在
     wisdom_dir = ensure_wisdom_dir()

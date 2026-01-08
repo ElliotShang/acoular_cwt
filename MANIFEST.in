@@ -1,0 +1,35 @@
+# 包含必要的文件
+include LICENSE
+include README.md
+include CMakeLists.txt
+
+# 包含 C++ 源代码
+recursive-include src *.cpp *.h
+
+# 包含 external 依赖
+recursive-include external *.cpp *.h *.lib *.dll *.so *.a
+
+# 排除测试文件
+exclude acoular_cwt/test_*.py
+exclude acoular_cwt/mock_cwt.py
+
+# 排除 wisdom 文件（硬件相关，应由用户自己生成）
+exclude acoular_cwt/*.wis
+
+# 排除编译产物和缓存
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude *.so
+global-exclude *.pyd
+global-exclude *.ilk
+global-exclude *.pdb
+global-exclude *.exp
+global-exclude *.lib
+
+# 排除构建目录
+prune build
+prune cmake-build-debug
+prune cmake-build-release
+prune *.egg-info
+

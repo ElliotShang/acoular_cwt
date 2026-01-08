@@ -1,0 +1,10 @@
+numpy>=1.20.0
+acoular>=22.10
+traits>=6.0.0
+scipy>=1.5.0
+numba>=0.50.0
+matplotlib>=3.3.0
+h5py>=3.0.0
+tables>=3.6.0
+setuptools>=42.0.0
+
