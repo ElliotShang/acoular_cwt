@@ -81,11 +81,11 @@ namespace MathUtils
             return;
         }
         #pragma omp parallel for schedule(dynamic) if(n_channels > 32)
-        for (size_t i = 0; i < n_channels; ++i)
+        for (int i = 0; i < static_cast<int>(n_channels); ++i)
         {
             auto v_i = snapshot.subspan(i*K, K);
             // 复共轭矩阵的特性，j不从0开始
-            for (size_t j = i; j < n_channels; ++j)
+            for (int j = i; j < static_cast<int>(n_channels); ++j)
             {
                 auto v_j = snapshot.subspan(j*K, K);
                 // 接下来计算小向量的共轭点积
@@ -105,8 +105,8 @@ namespace MathUtils
                 }
                 sum = std::complex<T>(sum_real * norm_factor, sum_imag * norm_factor);
                 // 基于Hermit矩阵的对称性进行填充
-                size_t idx_upper = i * n_channels + j; // 上三角索引
-                size_t idx_lower = j * n_channels + i; // 下三角索引
+                size_t idx_upper = static_cast<size_t>(i) * n_channels + static_cast<size_t>(j); // 上三角索引
+                size_t idx_lower = static_cast<size_t>(j) * n_channels + static_cast<size_t>(i); // 下三角索引
                 if (i == j)
                 {
                     if constexpr (Mode == CsmMode::RemoveDiagonal)

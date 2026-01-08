@@ -64,7 +64,7 @@ py::array_t<std::complex<float>> compute_csm_template(
     // 预先分配内存和输入数据转置，openmp并行
     std::vector<float> chunk_data(n_channels * chunk_len);
     #pragma omp parallel for
-    for (size_t ch = 0; ch < n_channels; ++ch) {
+    for (int ch = 0; ch < static_cast<int>(n_channels); ++ch) {
         float* dst = &chunk_data[ch * chunk_len];
         for (size_t t = 0; t < chunk_len; ++t) {
             // Acoular layout: (Time, Channels) -> ptr[t * M + ch]
@@ -126,12 +126,32 @@ py::array_t<std::complex<float>> compute_csm_dispatch(
     // 编译器模板分发
     if (method == "CWT")
     {
-
+        return compute_csm_template<AlgoType::CWT> (
+            raw_ptr,n_samples,n_channels,fs,target_freq,
+            global_target_idx,smoothing_width,param_val);
     }else if(method == "STFT")
     {
-
+        return compute_csm_template<AlgoType::STFT> (
+            raw_ptr,n_samples,n_channels,fs,target_freq,
+            global_target_idx,smoothing_width,param_val);
     }else
     {
         throw std::invalid_argument("Unknown method: " + method);
     }
+}
+
+// pybinding 接口定义
+PYBIND11_MODULE(_wcsm, m)
+{
+    m.doc() = "Accelerated Transient CSM Engine with Compile-time Optimization";
+    m.def("compute_csm", &compute_csm_dispatch,
+        "Compute instantaneous CSM",
+        py::arg("input_array"),
+        py::arg("fs"),
+        py::arg("target_freq"),
+        py::arg("target_idx"),
+        py::arg("method"),
+        py::arg("smoothing_width") = 0,
+        py::arg("param_val") = 6.0f
+        );
 }

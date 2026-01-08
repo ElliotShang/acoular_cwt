@@ -2,20 +2,51 @@ cmake_minimum_required(VERSION 3.18)
 project(acoular_cwt VERSION 0.1.0 LANGUAGES CXX)
 
 # =========================================================
-# 1. 配置 Python 环境
+# 1. 配置 Python 环境（支持多平台）
 # =========================================================
-# 尝试自动探测激活的 Conda 环境
-if(DEFINED ENV{CONDA_PREFIX})
-    message(STATUS "Detected active Conda environment: $ENV{CONDA_PREFIX}")
-    # 将 Conda 环境路径加入 CMAKE_PREFIX_PATH，这样 find_package(pybind11) 也能找到
-    list(PREPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+# 自动检测并配置 Python 环境
+if(WIN32)
+    # Windows 环境（Visual Studio 编译）
+    message(STATUS "Detected Windows environment")
     
-    # 提示 FindPython 优先使用虚拟环境中的 Python
-    set(Python_FIND_VIRTUALENV FIRST)
+    # 优先检查环境变量中的 CONDA_PREFIX（但必须是 Windows 路径）
+    if(DEFINED ENV{CONDA_PREFIX})
+        string(SUBSTRING "$ENV{CONDA_PREFIX}" 0 1 first_char)
+        if(NOT first_char STREQUAL "/")
+            # 是 Windows 路径，使用环境变量
+            message(STATUS "Using Conda environment from CONDA_PREFIX: $ENV{CONDA_PREFIX}")
+            list(PREPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+            set(Python_FIND_VIRTUALENV FIRST)
+        else()
+            message(WARNING "CONDA_PREFIX points to WSL/Linux path, ignoring in Windows build")
+        endif()
+    endif()
+    
+    # 如果环境变量不可用，使用固定路径
+    if(NOT Python_EXECUTABLE)
+        set(Python_ROOT_DIR "G:/Anaconda3/envs/acoustics")
+        set(Python_EXECUTABLE "G:/Anaconda3/envs/acoustics/python.exe")
+        message(STATUS "Using fallback Python path: ${Python_EXECUTABLE}")
+    endif()
+    
+    set(Python_FIND_REGISTRY LAST)
+    set(Python_FIND_STRATEGY LOCATION)
+    
+else()
+    # Linux/WSL 环境
+    message(STATUS "Detected Linux/WSL environment")
+    
+    # 优先使用 CONDA_PREFIX 环境变量
+    if(DEFINED ENV{CONDA_PREFIX})
+        message(STATUS "Using Conda environment: $ENV{CONDA_PREFIX}")
+        list(PREPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+        set(Python_FIND_VIRTUALENV FIRST)
+    else()
+        # 如果没有激活 Conda 环境，使用固定路径
+        set(Python_ROOT_DIR "/home/shanghr/miniforge3/envs/acoular_cwt")
+        message(STATUS "Using fallback Python path: ${Python_ROOT_DIR}")
+    endif()
 endif()
-
-# 如果是在 IDE 中且未激活 Conda，可能需要手动指定 Python_EXECUTABLE
-# set(Python_EXECUTABLE "/path/to/conda/python")
 
 # 查找 Python 解释器和开发资源
 find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
@@ -33,18 +64,56 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 if(MSVC)
-    add_compile_options(/O2 /arch:AVX2 /MP)
-    # Windows 下可能需要指定 NOMINMAX 防止 min/max 宏冲突
-    add_compile_options(/DNOMINMAX)
+    # Windows 下通用选项
+    # /wd4244 - 忽略 float 到 int 的隐式转换警告
+    add_compile_options(/arch:AVX2 /MP /DNOMINMAX /wd4244)
+    
+    # 根据构建类型设置优化选项
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_compile_options(/O2)
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        # Debug 模式使用默认的 /Od 和 /RTC1，不额外添加优化选项
+        # 如果需要在 Debug 模式下也优化，需要移除 /RTC1
+        # add_compile_options(/Od)
+    endif()
 else()
-    add_compile_options(-O3 -march=native -ffast-math -fopenmp -fvisibility=hidden)
+    add_compile_options(-march=native -ffast-math -fopenmp -fvisibility=hidden)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_compile_options(-O3)
+    endif()
 endif()
 
 # 查找 pybind11
+# 将 Python 环境路径加入 CMAKE_PREFIX_PATH，帮助查找 pybind11
+if(WIN32)
+    # Windows 环境下，pybind11 通常在 Library 子目录
+    if(Python_ROOT_DIR)
+        list(PREPEND CMAKE_PREFIX_PATH "${Python_ROOT_DIR}")
+        list(PREPEND CMAKE_PREFIX_PATH "${Python_ROOT_DIR}/Library")
+    endif()
+else()
+    # Linux/WSL 环境下，确保 Python 环境路径在搜索路径中
+    if(DEFINED ENV{CONDA_PREFIX})
+        list(PREPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+    elseif(Python_ROOT_DIR)
+        list(PREPEND CMAKE_PREFIX_PATH "${Python_ROOT_DIR}")
+    endif()
+endif()
+
 find_package(pybind11 CONFIG REQUIRED)
 
 # 查找 OpenMP 和 FFTW3
 find_package(OpenMP REQUIRED)
+
+if(MSVC)
+    # 强制 OpenMP 目标使用 /openmp:experimental 而不是默认的 -openmp
+    # 这解决了两个问题：
+    # 1. 避免同时出现 /openmp:llvm 和 -openmp 导致的覆盖问题
+    # 2. 启用 OpenMP SIMD 支持 (MSVC 要求 /openmp:experimental 才能支持 simd)
+    set_target_properties(OpenMP::OpenMP_CXX PROPERTIES 
+        INTERFACE_COMPILE_OPTIONS "/openmp:experimental"
+    )
+endif()
 
 # 配置 FFTW3
 if(MSVC)
@@ -72,7 +141,6 @@ target_link_libraries(fcwt_lib PUBLIC OpenMP::OpenMP_CXX ${FFTW3_LIBRARIES})
 # 收集所有源文件
 file(GLOB_RECURSE SOURCES
         "src/wcsm.cpp"
-        "src/binding.cpp"
         "src/core/*.cpp"   # 包含 CWTProcessor.cpp, STFTProcessor.cpp
         "src/utils/*.cpp"  # 如果 utils 下有 cpp 文件也会包含
 )
